@@ -16,17 +16,17 @@ class YcsbExperimentConfig(
 // Configurations in the experiments
 trait YcsbContended extends Experiment {
   def contentionLevel = 0
-  addAttribute(s"cont${contentionLevel}")
+  // addAttribute(s"cont${contentionLevel}")
 }
 
 trait YcsbSkewed extends Experiment {
   def skewFactor = 0
-  addAttribute(if (skewFactor == 0) "noskew" else "skew%02d".format(skewFactor))
+  // addAttribute(if (skewFactor == 0) "noskew" else "skew%02d".format(skewFactor))
 }
 
 trait YcsbDependency extends Experiment {
   def dependency = false
-  addAttribute(if (dependency) "dep" else "nodep")
+  // addAttribute(if (dependency) "dep" else "nodep")
 }
 
 abstract class BaseYcsbExperiment extends Experiment with YcsbContended with YcsbSkewed with YcsbDependency {
@@ -55,10 +55,7 @@ abstract class BaseYcsbExperiment extends Experiment with YcsbContended with Ycs
     super.cmdArguments() ++
     (if (contentionLevel == 0) Array("-XYcsbReadOnly8") else Array(s"-XYcsbContentionKey${contentionLevel}")) ++
     (if (skewFactor > 0) Array("-XYcsbSkewFactor%03d".format(skewFactor)) else Array[String]()) ++
-    (if (dependency) Array("-XYcsbDependency") else Array[String]()) ++
-    (if (epochSize == -1 && contentionLevel != 0)
-      (if (skewFactor == 0) Array[String]("-XEpochSize50000", "-XNrEpoch80") else Array[String]("-XEpochSize25000", "-XNrEpoch160"))
-    else Array[String]())
+    (if (dependency) Array("-XYcsbDependency") else Array[String]())
   }
 }
 
@@ -263,6 +260,100 @@ trait CaracalTuningTrait extends Experiment {
   }
 }
 
+class PriorityTxnConfig(val priorityMethod: Int = -1, val priorityPercentage: Int = -1) {}
+
+trait PriorityTxnTrait extends Experiment {
+  def addPriorityTxnAttributes(config: PriorityTxnConfig) = {
+    addAttribute(s"method${config.priorityMethod}")
+    addAttribute(s"pct${config.priorityPercentage}")
+  }
+
+  def extraCmdArguments(priTxnConfig: PriorityTxnConfig, defaultPriorityPercentage: Int) = {
+
+    val method = priTxnConfig.priorityMethod
+
+    val priorityPercentage =
+      if (priTxnConfig.priorityPercentage == -1) defaultPriorityPercentage
+      else priTxnConfig.priorityPercentage
+
+    val extraArgs = ArrayBuffer[String](
+      "-XVHandleBatchAppend", "-XPriorityTxn", "-XTxnQueueLength4M",
+      "-XStripBatched1", "-XStripPriority32",
+      s"-XPercentagePriorityTxn${priorityPercentage}",
+      "-XNrEpoch100")
+
+    /*
+    backoff scheme
+      all lockless append
+      1 - progress backoff, default baseline
+      2 - no backoff
+      3 - exp backoff, 1 lambda
+      4 - exp backoff, 2 lambda
+      5 - exp backoff, 4 lambda
+    */
+    if (method == 2) {
+      extraArgs ++= Array[String]("-XNoProgressBackoff")
+    } else if (method == 3) {
+      extraArgs ++= Array[String]("-XExpDistriBackoff")
+    } else if (method == 4) {
+      extraArgs ++= Array[String]("-XExpDistriBackoff", "-XExpLambda4000")
+    } else if (method == 5) {
+      extraArgs ++= Array[String]("-XExpDistriBackoff", "-XExpLambda8000")
+    } 
+
+    /*
+    lockless VS lock
+      6 - lock insert
+      7 - lock append, wts
+      1 - lockless append (wts implied)
+    */
+    if (method == 6) {
+      extraArgs ++= Array[String]("-XLockInsert")
+    } else if (method == 7) {
+      extraArgs ++= Array[String]("-XLockInsert", "-XSIDRowWTS")
+    } else {
+      extraArgs ++= Array[String]("-XSIDRowWTS")
+    }
+
+    /*
+    read tracking method
+      8 - read bit, last version patch
+      1 - row read timestamp
+    */
+    if (method == 8) {
+      extraArgs ++= Array[String]("-XRowRTS", "-XReadBit", "-XConflictReadBit", "-XSIDReadBit", "-XLastVersionPatch")
+    } else {
+      extraArgs ++= Array[String]("-XRowRTS", "-XConflictRowRTS", "-XSIDRowRTS")
+    }
+
+    /*
+    slot assign policy
+      9  - global inc
+      10 - local inc
+      11 - TicToc
+      1  - bitmap
+    */
+    if (method == 9) {
+      extraArgs ++= Array[String]("-XStripPriority1", "-XSIDGlobalInc")
+    } else if (method == 10) {
+      extraArgs ++= Array[String]("-XStripPriority32", "-XSIDLocalInc")
+    } else if (method == 11) {
+      extraArgs ++= Array[String]("-XTicTocMode")
+    } else {
+      extraArgs ++= Array[String]("-XStripPriority32", "-XSIDBitmap")
+    }
+
+    // 12 - no preemption
+    if (method == 12)
+      extraArgs += "-XNoPreemption"
+    // 13 - no TPC-C pin
+    if (method == 13)
+      extraArgs += "-XNoTpccPin"
+
+    extraArgs.toArray
+  }
+}
+
 class YcsbCaracalPieceExperiment(
   implicit val config: YcsbExperimentConfig,
   implicit val tuningConfig: CaracalTuningConfig = new CaracalTuningConfig())
@@ -357,10 +448,6 @@ abstract class BaseTpccExperiment(implicit val config: TpccExperimentConfig) ext
       val nodeName = s"host${i}"
       val args = Array(Experiment.Binary, "-c", Experiment.ControllerHost, "-n", nodeName, "-w", "tpcc", s"-XMaxNodeLimit${nodes}", s"-XTpccWarehouses${warehouses}") ++
       (if (config.readOnlyDelay) Array("-XTpccReadOnlyDelayQuery") else Array("")) ++
-      (if (epochSize == -1)
-        (if (warehouses == 1) Array("-XEpochSize30000", "-XNrEpoch120") else Array("-XEpochSize50000", "-XNrEpoch80"))
-      else
-        Array[String]()) ++
       cmdArguments()
 
       launchProcess(nodeName, args)
@@ -398,6 +485,37 @@ class TpccCaracalExperiment(
     if (epochSize > 0) default = Math.max(2, default * epochSize / 30000) // Int will overflow here. lol.
 
     super.cmdArguments() ++ extraCmdArguments(tuningConfig, default.toInt)
+  }
+}
+
+class TpccPriorityTxnExperiment(
+  implicit override val config: TpccExperimentConfig,
+  implicit val priorityTxnConfig: PriorityTxnConfig = new PriorityTxnConfig())
+    extends SingleNodeTpccExperiment with PriorityTxnTrait {
+
+  // addAttribute("caracal")
+  addPriorityTxnAttributes(priorityTxnConfig)
+
+  override def plotSymbol = "Caracal"
+  override def cmdArguments() = {
+    var pctDefault: Int = 20
+    super.cmdArguments() ++ extraCmdArguments(priorityTxnConfig, pctDefault)
+  }
+}
+
+class YcsbPriorityTxnExperiment(
+  implicit override val config: YcsbExperimentConfig,
+  implicit val priorityTxnConfig: PriorityTxnConfig = new PriorityTxnConfig())
+    extends BaseYcsbExperiment with PriorityTxnTrait {
+
+  // addAttribute("caracal")
+  addPriorityTxnAttributes(priorityTxnConfig)
+
+  override def memory = 50
+  override def plotSymbol = "Caracal"
+  override def cmdArguments() = {
+    var pctDefault: Int = 20
+    super.cmdArguments() ++ extraCmdArguments(priorityTxnConfig, pctDefault)
   }
 }
 
@@ -713,6 +831,30 @@ object ExperimentsMain extends App {
       for (singleWarehouse <- Seq(false, true)) {
         implicit val config = new TpccExperimentConfig(32, 64, 1, epochSize, singleWarehouse)
         runs.append(new TpccCaracalExperiment())
+      }
+    }
+  }
+
+  ExperimentSuite("PriTxnPct", "PriTxn with different PriTxn Percentage") {
+    runs: ArrayBuffer[Experiment] =>
+
+    val pct_list = List(1, 10, 20, 30, 40)
+    val method_list = List(1, 6, 7, 8, 9, 10)
+    for (method <- method_list) {
+      for (pct <- pct_list) {
+        implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
+        implicit val config = new TpccExperimentConfig(32, 50, 1, -1, false)
+        runs.append(new TpccPriorityTxnExperiment())
+      }
+      for (pct <- pct_list) {
+        implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
+        implicit val config = new TpccExperimentConfig(32, 50, 1, -1, true)
+        runs.append(new TpccPriorityTxnExperiment())
+      }
+      for (pct <- pct_list) {
+        implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
+        implicit val config = new YcsbExperimentConfig(32, 50, 0, 0, false)
+        runs.append(new YcsbPriorityTxnExperiment())
       }
     }
   }

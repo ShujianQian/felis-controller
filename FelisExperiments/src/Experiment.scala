@@ -12,10 +12,10 @@ import scala.util.{Failure, Success, Try}
 class ExperimentRunException extends Exception {}
 
 object Experiment {
-  var ControllerHost = System.getProperty("controller.host", "127.0.0.1:3148")
-  var ControllerHttp = System.getProperty("controller.http", "127.0.0.1:8666")
-  var Binary = "~/workspace/felis/buck-out/gen/db#release"
-  var WorkingDir = "~/workspace/felis/results"
+  var ControllerHost = System.getProperty("controller.host", "127.0.0.1:8989")
+  var ControllerHttp = System.getProperty("controller.http", "127.0.0.1:7878")
+  var Binary = "~/felis/buck-out/gen/db#release"
+  var WorkingDir = "~/workspace/results"
 }
 
 trait Experiment {
@@ -160,10 +160,11 @@ object ExperimentSuite {
     var progress = -1
     val tot = all.length
     val hostname = InetAddress.getLocalHost().getHostName()
-    val slk = Option(System.getProperty("slackToken")).map(t => new SlackClient(t))
+    val slkToken = "xoxb-138984042708-eObGpPy1uPANJqIypb2wV8iE"
+    val slk = if (slkToken != null) Some(new SlackClient(slkToken)) else None
 
     val header = s"Experiments start running on ${hostname}. Total ${tot} experiments.\n${name}: ${desc}\n"
-    val msg = slk.map { _.chat.postMessage("#db", header) }
+    val msg = slk.map { _.chat.postMessage("UCXBUGZNC", header) } // zhiqi's slack ID
     for (e <- all) {
       cur += 1
       if (ProgressBarWidth * cur / tot > progress) {
@@ -187,7 +188,7 @@ object ExperimentSuite {
           do {
             try {
               slk.map {
-                _.chat.postMessage("#db", s"Experiment on ${hostname} ${e.attributes.mkString(" + ")} failed, skipping...")
+                _.chat.postMessage("UCXBUGZNC", s"Experiment on ${hostname} ${e.attributes.mkString(" + ")} failed, skipping...")
               }
             } catch {
               case e: SocketTimeoutException => again = true
@@ -202,12 +203,13 @@ object ExperimentSuite {
     }
     Thread.sleep(1000)
     slk.map {
-      _.chat.postMessage("#db", s"Experiments all done on ${hostname}.")
+      _.chat.postMessage("UCXBUGZNC", s"Experiments all done on ${hostname}.")
     }
   }
 
   def invoke(name: String) = {
     suites.get(name) match {
+      // Some/None: use the Option class when a function return can be null
       case Some(s) => {
         val runs = ArrayBuffer[Experiment]()
         s.setup(runs)
@@ -229,6 +231,9 @@ object ExperimentSuite {
     println()
   }
 
+  // any object in Scala can be called as function, if it has apply
+  // treat object ExperimentSuite as a function, apply this function to the parameter
+  // double parameter list, setup is a function
   def apply(name: String, description: String)(setup: (ArrayBuffer[Experiment]) => Unit): Unit = {
     val s = new ExperimentSuite(name, description, setup)
     suites(s.name) = s
