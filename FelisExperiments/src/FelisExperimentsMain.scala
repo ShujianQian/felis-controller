@@ -345,7 +345,7 @@ trait PriorityTxnTrait extends Experiment {
 
     // 12 - no preemption
     if (method == 12)
-      extraArgs += "-XNoPreemption"
+      extraArgs += "-XNoPriorityPreempt"
     // 13 - no TPC-C pin
     if (method == 13)
       extraArgs += "-XNoTpccPin"
@@ -422,9 +422,9 @@ class TpccExperimentConfig(
 
 abstract class BaseTpccExperiment(implicit val config: TpccExperimentConfig) extends Experiment {
   if (config.singleWarehouse) {
-    addAttribute("singlewarehouse-tpcc")
+    addAttribute("1-tpcc")
   } else if (config.nodes == 1) {
-    addAttribute("singlenode-tpcc")
+    addAttribute("32-tpcc")
   } else {
     addAttribute("distributed-tpcc")
   }
@@ -493,7 +493,6 @@ class TpccPriorityTxnExperiment(
   implicit val priorityTxnConfig: PriorityTxnConfig = new PriorityTxnConfig())
     extends SingleNodeTpccExperiment with PriorityTxnTrait {
 
-  // addAttribute("caracal")
   addPriorityTxnAttributes(priorityTxnConfig)
 
   override def plotSymbol = "Caracal"
@@ -508,7 +507,7 @@ class YcsbPriorityTxnExperiment(
   implicit val priorityTxnConfig: PriorityTxnConfig = new PriorityTxnConfig())
     extends BaseYcsbExperiment with PriorityTxnTrait {
 
-  // addAttribute("caracal")
+  addAttribute("ycsb")
   addPriorityTxnAttributes(priorityTxnConfig)
 
   override def memory = 50
