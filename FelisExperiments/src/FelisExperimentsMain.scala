@@ -277,7 +277,7 @@ trait PriorityTxnTrait extends Experiment {
       else priTxnConfig.priorityPercentage
 
     val extraArgs = ArrayBuffer[String](
-      "-XVHandleBatchAppend", "-XPriorityTxn", "-XTxnQueueLength4M",
+      "-XVHandleBatchAppend", "-XPriorityTxn", "-XTxnQueueLength8M",
       "-XStripBatched1", "-XStripPriority32",
       s"-XPercentagePriorityTxn${priorityPercentage}",
       "-XNrEpoch100")
@@ -303,11 +303,15 @@ trait PriorityTxnTrait extends Experiment {
 
     /*
     lockless VS lock
-      6 - lock insert
+      6 - lock insert (also 14 & 15, see below)
       7 - lock append, wts
       1 - lockless append (wts implied)
     */
     if (method == 6) {
+      extraArgs ++= Array[String]("-XLockInsert")
+    } else if (method == 14) {
+      extraArgs ++= Array[String]("-XLockInsert")
+    } else if (method == 15) {
       extraArgs ++= Array[String]("-XLockInsert")
     } else if (method == 7) {
       extraArgs ++= Array[String]("-XLockInsert", "-XSIDRowWTS")
@@ -317,10 +321,12 @@ trait PriorityTxnTrait extends Experiment {
 
     /*
     read tracking method
-      8 - read bit, last version patch
-      1 - row read timestamp
+      15 - (row read timestamp) + (lock insert)
+      8  - (read bit, last version patch) + (lockless append)
+      14 - (read bit, last version patch) + (lock insert)
+      1  - (row read timestamp) + (lockless append)
     */
-    if (method == 8) {
+    if (method == 8 || method == 14) {
       extraArgs ++= Array[String]("-XRowRTS", "-XReadBit", "-XConflictReadBit", "-XSIDReadBit", "-XLastVersionPatch")
     } else {
       extraArgs ++= Array[String]("-XRowRTS", "-XConflictRowRTS", "-XSIDRowRTS")
@@ -837,22 +843,22 @@ object ExperimentsMain extends App {
   ExperimentSuite("PriTxnPct", "PriTxn with different PriTxn Percentage") {
     runs: ArrayBuffer[Experiment] =>
 
-    val pct_list = List(1, 10, 20, 30, 40)
-    val method_list = List(1, 6, 7, 8, 9, 10)
+    val pct_list = List(1, 10, 15, 20, 25, 30, 35, 40)
+    val method_list = List(1, 11, 10)
     for (method <- method_list) {
       for (pct <- pct_list) {
         implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
-        implicit val config = new TpccExperimentConfig(32, 50, 1, -1, false)
+        implicit val config = new TpccExperimentConfig(32, 48, 1, -1, false)
         runs.append(new TpccPriorityTxnExperiment())
       }
       for (pct <- pct_list) {
         implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
-        implicit val config = new TpccExperimentConfig(32, 50, 1, -1, true)
+        implicit val config = new TpccExperimentConfig(32, 48, 1, -1, true)
         runs.append(new TpccPriorityTxnExperiment())
       }
       for (pct <- pct_list) {
         implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
-        implicit val config = new YcsbExperimentConfig(32, 50, 0, 0, false)
+        implicit val config = new YcsbExperimentConfig(32, 48, 0, 0, false)
         runs.append(new YcsbPriorityTxnExperiment())
       }
     }
