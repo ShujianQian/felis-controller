@@ -278,7 +278,7 @@ trait PriorityTxnTrait extends Experiment {
 
     val extraArgs = ArrayBuffer[String](
       "-XVHandleBatchAppend", "-XPriorityTxn", "-XTxnQueueLength8M",
-      "-XStripBatched1", "-XStripPriority32",
+      "-XStripBatched1",
       s"-XPercentagePriorityTxn${priorityPercentage}",
       "-XNrEpoch100")
 
