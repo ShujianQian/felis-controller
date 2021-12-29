@@ -14,7 +14,7 @@ class ExperimentRunException extends Exception {}
 object Experiment {
   var ControllerHost = System.getProperty("controller.host", "127.0.0.1:8989")
   var ControllerHttp = System.getProperty("controller.http", "127.0.0.1:7878")
-  var Binary = "~/felis/buck-out/gen/db#release"
+  var Binary = "~/workspace/felis/buck-out/gen/db#release"
   var WorkingDir = "~/workspace/results"
 }
 
@@ -164,11 +164,12 @@ object ExperimentSuite {
     val slk = if (slkToken != null) Some(new SlackClient(slkToken)) else None
 
     val header = s"Experiments start running on ${hostname}. Total ${tot} experiments.\n${name}: ${desc}\n"
-    val msg = slk.map { _.chat.postMessage("UCXBUGZNC", header) } // zhiqi's slack ID
+    // val msg = slk.map { _.chat.postMessage("UCXBUGZNC", header) } // zhiqi's slack ID
     for (e <- all) {
       cur += 1
       if (ProgressBarWidth * cur / tot > progress) {
         progress += 1
+        /*
         try {
           slk.map {
             _.chat.update(msg.get,
@@ -177,6 +178,7 @@ object ExperimentSuite {
         } catch {
           case e: SocketTimeoutException => println("Slack update failed, ignoring")
         }
+        */
       }
 
       println(s"${hostname} Running ${e.attributes.mkString(" + ")} ${cur}/${tot}")
@@ -186,6 +188,7 @@ object ExperimentSuite {
         case _: ExperimentRunException => {
           var again = false
           do {
+            /*
             try {
               slk.map {
                 _.chat.postMessage("UCXBUGZNC", s"Experiment on ${hostname} ${e.attributes.mkString(" + ")} failed, skipping...")
@@ -194,6 +197,7 @@ object ExperimentSuite {
               case e: SocketTimeoutException => again = true
               case _: Throwable => {}
             }
+            */
           } while (again)
 
           println("Failed")
@@ -202,9 +206,11 @@ object ExperimentSuite {
       Thread.sleep(1000)
     }
     Thread.sleep(1000)
+    /*
     slk.map {
       _.chat.postMessage("UCXBUGZNC", s"Experiments all done on ${hostname}.")
     }
+    */
   }
 
   def invoke(name: String) = {
