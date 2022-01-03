@@ -161,7 +161,7 @@ object ExperimentSuite {
     val tot = all.length
     val hostname = InetAddress.getLocalHost().getHostName()
     val slkToken = "xoxb-138984042708-eObGpPy1uPANJqIypb2wV8iE"
-    val slk = if (slkToken != null) Some(new SlackClient(slkToken)) else None
+    // val slk = if (slkToken != null) Some(new SlackClient(slkToken)) else None
 
     val header = s"Experiments start running on ${hostname}. Total ${tot} experiments.\n${name}: ${desc}\n"
     // val msg = slk.map { _.chat.postMessage("UCXBUGZNC", header) } // zhiqi's slack ID
