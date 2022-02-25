@@ -14,7 +14,7 @@ class ExperimentRunException extends Exception {}
 object Experiment {
   var ControllerHost = System.getProperty("controller.host", "127.0.0.1:8989")
   var ControllerHttp = System.getProperty("controller.http", "127.0.0.1:7878")
-  var Binary = "~/workspace/felis/buck-out/gen/db#release"
+  var Binary = System.getProperty("db.path", "~/workspace/felis/buck-out/gen/db#release")
   var WorkingDir = "~/workspace/results"
 }
 
