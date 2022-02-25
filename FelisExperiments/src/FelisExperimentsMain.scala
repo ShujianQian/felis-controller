@@ -822,6 +822,22 @@ object ExperimentsMain extends App {
     }
   }
 
+  ExperimentSuite("YcsbPri", "Ycsb with priority txn") {
+    runs: ArrayBuffer[Experiment] =>
+
+    val pct = 20
+    val method = 1
+    val cpu = 32
+    val mem = 48
+    val skewFactor = 0
+    val contentionLevel = 0
+    val dependency = false
+    implicit val priorityTxnConfig = new PriorityTxnConfig(method, pct)
+    implicit val config =
+      new YcsbExperimentConfig(cpu, mem, skewFactor, contentionLevel, dependency)
+    runs.append(new YcsbPriorityTxnExperiment())
+  }
+
   ExperimentSuite("EpochSizeTuning", "Tpcc with different epoch sizes") {
     runs: ArrayBuffer[Experiment] =>
     
